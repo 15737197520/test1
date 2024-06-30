@@ -1,6 +1,9 @@
+import asyncio
+import time
+
 import requests
 from urllib.parse import urlencode, quote  # 导入编码模块
-
+from telegram_api import send
 
 proxies = {
     'http': 'http://127.0.0.1:10809',
@@ -8,7 +11,7 @@ proxies = {
 }
 
 url = "https://x.com/i/api/graphql/V7H0Ap3_Hh2FyS75OCDO3Q/UserTweets?" \
-      "variables=%7B%22userId%22%3A%2244196397%22%2C%22count%22%3A{count}%2" \
+      "variables=%7B%22userId%22%3A%221420609694402433028%22%2C%22count%22%3A{count}%2" \
       "C%22includePromotedContent%22%3Atrue%2C%22withQuickPromoteEligibi" \
       "lityTweetFields%22%3Atrue%2C%22withVoice%22%3Atrue%2C%22withV2Time" \
       "line%22%3Atrue%7D&features=%7B%22rweb_tipjar_consumption_enabled%22" \
@@ -34,52 +37,6 @@ url = "https://x.com/i/api/graphql/V7H0Ap3_Hh2FyS75OCDO3Q/UserTweets?" \
       "ve_web_enhance_cards_enabled%22%3Afalse%7D&fieldToggles=%7B%22withArticl" \
       "ePlainText%22%3A{is_plain_text}%7D".format(count="2", is_plain_text="true")
 
-# 第二页url
-url2 = "https://x.com/i/api/graphql/V7H0Ap3_Hh2FyS75OCDO3Q/UserTweets"
-
-url_variables = {
-
-        "userId": "44196397",
-        "count": 2,
-        "cursor": "DAABCgABGQ61Tak__-kKAAIZCawoHFqRqQgAAwAAAAIAAA",
-        "includePromotedContent": True,
-        "withQuickPromoteEligibilityTweetFields": True,
-        "withVoice": True,
-        "withV2Timeline": True,
-    }
-
-url_features = {
-    "rweb_tipjar_consumption_enabled": True,
-    "responsive_web_graphql_exclude_directive_enabled": True,
-    "verified_phone_label_enabled": False,
-    "creator_subscriptions_tweet_preview_api_enabled": True,
-    "responsive_web_graphql_timeline_navigation_enabled": True,
-    "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
-    "communities_web_enable_tweet_community_results_fetch": True,
-    "c9s_tweet_anatomy_moderator_badge_enabled": True,
-    "articles_preview_enabled": True,
-    "tweetypie_unmention_optimization_enabled": True,
-    "responsive_web_edit_tweet_api_enabled": True,
-    "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
-    "view_counts_everywhere_api_enabled": True,
-    "longform_notetweets_consumption_enabled": True,
-    "responsive_web_twitter_article_tweet_consumption_enabled": True,
-    "tweet_awards_web_tipping_enabled": False,
-    "creator_subscriptions_quote_tweet_preview_enabled": False,
-    "freedom_of_speech_not_reach_fetch_enabled": True,
-    "standardized_nudges_misinfo": True,
-    "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": True,
-    "rweb_video_timestamps_enabled": True,
-    "longform_notetweets_rich_text_read_enabled": True,
-    "longform_notetweets_inline_media_enabled": True,
-    "responsive_web_enhance_cards_enabled": False
-}
-# TODO True和False有什么区别
-fieldToggles = {"withArticlePlainText": False}
-
-print(urlencode(url_features))
-
-# url2_with_encoder = quote(url_keyword_dict, safe=True)
 
 headers = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 "
@@ -104,7 +61,40 @@ headers = {
 }
 
 res = requests.get(url=url, headers=headers, proxies=proxies).json()
-print(res.url)
-print(res)
+# print(res)
 instructions = res['data']['user']['result']['timeline_v2']['timeline']['instructions']
-the_list = instructions['']
+
+# 首先获取所有的推文
+entries = []
+for i in instructions:
+    if i.get("type") == 'TimelineAddEntries':
+        if i.get("entries"):
+            entries = i.get("entries")
+
+# 拿到推文的内容
+
+for j in entries:
+
+    content_tmp = j.get("content").get("itemContent")
+    if not content_tmp:
+        continue
+
+    legacy = content_tmp.get("tweet_results").get("result").get("legacy")
+
+    if not legacy:
+        continue
+
+    if legacy.get("retweeted_status_result"):
+        # 如果是转发评论  获取真正的推文
+        legacy = legacy.get("retweeted_status_result").get("result").get("legacy")
+
+    entry_id = legacy.get("id_str")
+    content = legacy.get("full_text")
+    create_time = legacy.get("created_at")
+
+    print("id:\n", entry_id)
+    print("content:\n", content)
+    print("create_time:\n", create_time)
+    print("\n-------------------------------------\n")
+    asyncio.run(send(content))
+    # time.sleep(1)
