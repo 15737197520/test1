@@ -3,10 +3,10 @@ import time
 
 import requests
 from urllib.parse import urlencode, quote  # 导入编码模块
-from telegram_api import send
 
 
-def request_tweet():
+
+def request_tweet(tid):
     proxies = {
         'http': 'http://127.0.0.1:10809',
         'https': 'https://127.0.0.1:10809',
@@ -37,7 +37,7 @@ def request_tweet():
           "bled%22%3Atrue%2C%22longform_notetweets_rich_text_read_enabled%22%3Atru" \
           "e%2C%22longform_notetweets_inline_media_enabled%22%3Atrue%2C%22responsi" \
           "ve_web_enhance_cards_enabled%22%3Afalse%7D&fieldToggles=%7B%22withArticl" \
-          "ePlainText%22%3A{is_plain_text}%7D".format(count="2", is_plain_text="true", tid=1803391245861134336)
+          "ePlainText%22%3A{is_plain_text}%7D".format(count="2", is_plain_text="true", tid=tid)
 
 
     headers = {
@@ -71,9 +71,14 @@ def request_tweet():
     return_data = []
     return_id_data = []
     for i in instructions:
-        if i.get("type") == 'TimelineAddEntries':
-            if i.get("entries"):
-                entries = i.get("entries")
+        # if i.get("type") == 'TimelineAddEntries':
+        # 处理置顶
+        if "entry" in i and i.get("entry"):
+            entries.append(i.get("entry"))
+            print(entries)
+
+        if "entries" in i and i.get("entries"):
+            entries.extend(i.get("entries"))
 
     # 拿到推文的内容
 
@@ -84,17 +89,30 @@ def request_tweet():
             continue
 
         legacy = content_tmp.get("tweet_results").get("result").get("legacy")
+        core = content_tmp.get("tweet_results").get("result").get("core")
 
         if not legacy:
             continue
 
-        if legacy.get("retweeted_status_result"):
-            # 如果是转发评论  获取真正的推文
-            legacy = legacy.get("retweeted_status_result").get("result").get("legacy")
-
+        operate = ""
+        # 发送者
+        name = core.get("user_results").get("result").get("legacy").get("name")
         entry_id = legacy.get("id_str")
         content = legacy.get("full_text")
+        media = [m['media_url_https'] for m in legacy.get("entities").get("media")]
+
         create_time = legacy.get("created_at")
+        # 转发内容
+        retweeted = dict()
+
+        if legacy.get("retweeted_status_result"):
+            operate = "转发"
+            # 如果是转发评论  获取真正的推文
+            legacy = legacy.get("retweeted_status_result").get("result").get("legacy")
+            core = legacy.get("retweeted_status_result").get("result").get("core")
+            retweeted['content'] = legacy.get("full_text")
+            retweeted['name'] = core.get("user_results").get("result").get("legacy").get("name")
+            retweeted['media'] = [m1['media_url_https'] for m1 in legacy.get("entities").get("media")]
 
         print("id:\n", entry_id)
         print("content:\n", content)
@@ -102,13 +120,16 @@ def request_tweet():
         print("\n-------------------------------------\n")
         return_data.append({
             "id": entry_id,
+            "name": name,
+            "operate": operate,
             "content": content,
+            "media": media,
+            "retweeted": retweeted,
             "create_time": create_time
         })
         return_id_data.append(entry_id)
-        # asyncio.run(send(content))
+
     return return_data, return_id_data
-        # time.sleep(1)
 
 
 # request_tweet()
